@@ -24,9 +24,9 @@ TOTAL              2428.9 GB    340.7 GB    312.6 GB   3082.2 GB     1.06x
 Install
 -------
 
-Drop the binary in `/opt/local/bin`, drop `zspace-classes.txt` in
-`/opt/local/etc`. Edit the latter to suite; the format is
-`<name><space><regexp>`.
+Drop the [binary](https://github.com/calmh/zspace/releases) in
+`/opt/local/bin`, drop `zspace-classes.txt` in `/opt/local/etc`. Edit
+the latter to suite; the format is `<name><space><regexp>`.
 
 Run
 ---
