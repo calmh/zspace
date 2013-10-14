@@ -31,17 +31,20 @@ type Sum struct {
 	LogicalReferenced uint64
 }
 
-var sums = make(map[string]Sum)
-
-const lineFmt = "%-16s  %10s  %10s  %10s  %10s  %8s\n"
+var (
+	zfsOptions = []string{"list", "-pHo", "name,type,avail,used,usedsnap,usedds,usedrefreserv,logicalreferenced"}
+	lineFmt    = "%-16s  %10s  %10s  %10s  %10s  %8s\n"
+	sums       = make(map[string]Sum)
+)
 
 func list(host string) []ZFS {
 	var res []ZFS
 	var cmd *exec.Cmd
 	if host == "" {
-		cmd = exec.Command("zfs", "list", "-pHo", "name,type,avail,used,usedsnap,usedds,usedrefreserv,logicalreferenced")
+		cmd = exec.Command("zfs", zfsOptions...)
 	} else {
-		cmd = exec.Command("ssh", host, "zfs", "list", "-pHo", "name,type,avail,used,usedsnap,usedds,usedrefreserv,logicalreferenced")
+		sshOptions := append([]string{host, "zfs"}, zfsOptions...)
+		cmd = exec.Command("ssh", sshOptions...)
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
