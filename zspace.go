@@ -3,13 +3,13 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
 	"sort"
 	"strings"
-	"text/tabwriter"
 )
 
 type ZFS struct {
@@ -22,9 +22,14 @@ type ZFS struct {
 	UsedRefReserv int64
 }
 
-func List() []ZFS {
+func List(host string) []ZFS {
 	var res []ZFS
-	cmd := exec.Command("zfs", "list", "-pHo", "name,type,avail,used,usedsnap,usedds,usedrefreserv,usedchild")
+	var cmd *exec.Cmd
+	if host == "" {
+		cmd = exec.Command("zfs", "list", "-pHo", "name,type,avail,used,usedsnap,usedds,usedrefreserv,usedchild")
+	} else {
+		cmd = exec.Command("ssh", host, "zfs", "list", "-pHo", "name,type,avail,used,usedsnap,usedds,usedrefreserv,usedchild")
+	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		panic(err)
@@ -80,13 +85,18 @@ func loadFsClasses(file string) map[string]*regexp.Regexp {
 	return classes
 }
 
+const lineFmt = "%-16s %10s %10s %10s %10s\n"
+
 func main() {
-	classes := loadFsClasses("/opt/local/etc/zspace-classes.txt")
+	host := flag.String("h", "", "Host name (default localhost)")
+	cf := flag.String("c", "/opt/local/etc/zspace-classes.txt", "Classes file")
+	flag.Parse()
 
-	tw := tabwriter.NewWriter(os.Stdout, 4, 4, 2, ' ', 0)
-	tw.Write([]byte("CATEGORY\t   DATASET\t  SNAPSHOT\t    REFRES\t     TOTAL\n"))
+	classes := loadFsClasses(*cf)
 
-	l := List()
+	fmt.Printf(lineFmt, "CATEGORY", "DATASET", "SNAPSHOT", "REFRES", "TOTAL")
+
+	l := List(*host)
 loop:
 	for _, z := range l {
 		add("total", z)
@@ -111,11 +121,9 @@ loop:
 
 	for _, k := range keys {
 		v := sums[k]
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", k, gb(v.UsedDS), gb(v.UsedSnap), gb(v.UsedRefReserv), gb(v.Total))
+		fmt.Printf(lineFmt, k, gb(v.UsedDS), gb(v.UsedSnap), gb(v.UsedRefReserv), gb(v.Total))
 	}
 
 	v := sums["total"]
-	fmt.Fprintf(tw, "TOTAL\t%s\t%s\t%s\t%s\n", gb(v.UsedDS), gb(v.UsedSnap), gb(v.UsedRefReserv), gb(v.Total))
-
-	tw.Flush()
+	fmt.Printf(lineFmt, "TOTAL", gb(v.UsedDS), gb(v.UsedSnap), gb(v.UsedRefReserv), gb(v.Total))
 }
