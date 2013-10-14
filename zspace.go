@@ -13,22 +13,35 @@ import (
 )
 
 type ZFS struct {
-	Name          string
-	Type          string
-	Avail         int64
-	Used          int64
-	UsedSnap      int64
-	UsedDS        int64
-	UsedRefReserv int64
+	Name              string
+	Type              string
+	Avail             uint64
+	Used              uint64
+	UsedSnap          uint64
+	UsedDS            uint64
+	UsedRefReserv     uint64
+	LogicalReferenced uint64
 }
 
-func List(host string) []ZFS {
+type Sum struct {
+	UsedDS            uint64
+	UsedSnap          uint64
+	UsedRefReserv     uint64
+	Total             uint64
+	LogicalReferenced uint64
+}
+
+var sums = make(map[string]Sum)
+
+const lineFmt = "%-16s  %10s  %10s  %10s  %10s  %8s\n"
+
+func list(host string) []ZFS {
 	var res []ZFS
 	var cmd *exec.Cmd
 	if host == "" {
-		cmd = exec.Command("zfs", "list", "-pHo", "name,type,avail,used,usedsnap,usedds,usedrefreserv,usedchild")
+		cmd = exec.Command("zfs", "list", "-pHo", "name,type,avail,used,usedsnap,usedds,usedrefreserv,logicalreferenced")
 	} else {
-		cmd = exec.Command("ssh", host, "zfs", "list", "-pHo", "name,type,avail,used,usedsnap,usedds,usedrefreserv,usedchild")
+		cmd = exec.Command("ssh", host, "zfs", "list", "-pHo", "name,type,avail,used,usedsnap,usedds,usedrefreserv,logicalreferenced")
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -38,25 +51,22 @@ func List(host string) []ZFS {
 	line, err := br.ReadString('\n')
 	for err == nil {
 		var z ZFS
-		fmt.Sscanf(line, "%s %s %d %d %d %d %d", &z.Name, &z.Type, &z.Avail, &z.Used, &z.UsedSnap, &z.UsedDS, &z.UsedRefReserv)
+		fmt.Sscanf(line, "%s %s %d %d %d %d %d %d", &z.Name, &z.Type, &z.Avail, &z.Used, &z.UsedSnap, &z.UsedDS, &z.UsedRefReserv, &z.LogicalReferenced)
 		res = append(res, z)
 		line, err = br.ReadString('\n')
 	}
 	return res
 }
 
-func gb(b int64) string {
-	return fmt.Sprintf("%7.01f GB", float64(b)/(1<<(10*3)))
+func gb(b uint64) string {
+	const GB = 1 << 30
+	return fmt.Sprintf("%7.01f GB", float64(b)/GB)
 }
 
-type Sum struct {
-	UsedDS        int64
-	UsedSnap      int64
-	UsedRefReserv int64
-	Total         int64
+func comp(s Sum) string {
+	r := float64(s.LogicalReferenced) / float64(s.UsedDS)
+	return fmt.Sprintf("%.02fx", r)
 }
-
-var sums = make(map[string]Sum)
 
 func add(cat string, z ZFS) {
 	s := sums[cat]
@@ -64,6 +74,7 @@ func add(cat string, z ZFS) {
 	s.UsedSnap += z.UsedSnap
 	s.UsedRefReserv += z.UsedRefReserv
 	s.Total += z.UsedDS + z.UsedSnap + z.UsedRefReserv
+	s.LogicalReferenced += z.LogicalReferenced
 	sums[cat] = s
 }
 
@@ -85,8 +96,6 @@ func loadFsClasses(file string) map[string]*regexp.Regexp {
 	return classes
 }
 
-const lineFmt = "%-16s %10s %10s %10s %10s\n"
-
 func main() {
 	host := flag.String("h", "", "Host name (default localhost)")
 	cf := flag.String("c", "/opt/local/etc/zspace-classes.txt", "Classes file")
@@ -94,9 +103,9 @@ func main() {
 
 	classes := loadFsClasses(*cf)
 
-	fmt.Printf(lineFmt, "CATEGORY", "DATASET", "SNAPSHOT", "REFRES", "TOTAL")
+	l := list(*host)
+	fmt.Printf(lineFmt, "CATEGORY", "DATASET", "SNAPSHOT", "REFRES", "TOTAL", "COMPRESS")
 
-	l := List(*host)
 loop:
 	for _, z := range l {
 		add("total", z)
@@ -121,9 +130,9 @@ loop:
 
 	for _, k := range keys {
 		v := sums[k]
-		fmt.Printf(lineFmt, k, gb(v.UsedDS), gb(v.UsedSnap), gb(v.UsedRefReserv), gb(v.Total))
+		fmt.Printf(lineFmt, k, gb(v.UsedDS), gb(v.UsedSnap), gb(v.UsedRefReserv), gb(v.Total), comp(v))
 	}
 
 	v := sums["total"]
-	fmt.Printf(lineFmt, "TOTAL", gb(v.UsedDS), gb(v.UsedSnap), gb(v.UsedRefReserv), gb(v.Total))
+	fmt.Printf(lineFmt, "TOTAL", gb(v.UsedDS), gb(v.UsedSnap), gb(v.UsedRefReserv), gb(v.Total), comp(v))
 }
