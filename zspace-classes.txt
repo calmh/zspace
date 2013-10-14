@@ -1,0 +1,4 @@
+vm ^zones/([0-9a-f]+-|srv/iso)
+backup ^zones/srv/bk(/?)
+git ^zones/srv/git(/?)
+system ^zones/(dump|swap|var|opt|usbkey|config|cores)
