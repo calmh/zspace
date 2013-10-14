@@ -40,24 +40,8 @@ func List() []ZFS {
 	return res
 }
 
-const (
-	_ = 1 << (10 * iota)
-	KB
-	MB
-	GB
-	TB
-)
-
-func byteFmt(b int64) string {
-	switch {
-	case b >= TB:
-		return fmt.Sprintf("%5.02f TB", float64(b)/TB)
-	case b >= GB:
-		return fmt.Sprintf("%5.01f GB", float64(b)/GB)
-	case b >= MB:
-		return fmt.Sprintf("%5.01f MB", float64(b)/MB)
-	}
-	return fmt.Sprintf("%5d KB", b/KB)
+func gb(b int64) string {
+	return fmt.Sprintf("%7.01f GB", float64(b)/(1<<(10*3)))
 }
 
 type Sum struct {
@@ -100,7 +84,7 @@ func main() {
 	classes := loadFsClasses("/opt/local/etc/zspace-classes.txt")
 
 	tw := tabwriter.NewWriter(os.Stdout, 4, 4, 2, ' ', 0)
-	tw.Write([]byte("CATEGORY\tDATASET\tSNAPSHOT\tRESERVED\tTOTAL\n"))
+	tw.Write([]byte("CATEGORY\t   DATASET\t  SNAPSHOT\t    REFRES\t     TOTAL\n"))
 
 	l := List()
 loop:
@@ -127,11 +111,11 @@ loop:
 
 	for _, k := range keys {
 		v := sums[k]
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", k, byteFmt(v.UsedDS), byteFmt(v.UsedSnap), byteFmt(v.UsedRefReserv), byteFmt(v.Total))
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", k, gb(v.UsedDS), gb(v.UsedSnap), gb(v.UsedRefReserv), gb(v.Total))
 	}
 
 	v := sums["total"]
-	fmt.Fprintf(tw, "TOTAL\t%s\t%s\t%s\t%s\n", byteFmt(v.UsedDS), byteFmt(v.UsedSnap), byteFmt(v.UsedRefReserv), byteFmt(v.Total))
+	fmt.Fprintf(tw, "TOTAL\t%s\t%s\t%s\t%s\n", gb(v.UsedDS), gb(v.UsedSnap), gb(v.UsedRefReserv), gb(v.Total))
 
 	tw.Flush()
 }
